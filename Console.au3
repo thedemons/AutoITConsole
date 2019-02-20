@@ -126,10 +126,11 @@ Func _CS_Execute($Console, $hConsole, $String)
 			$strSplitResult = StringSplit($strSplit[2], "&", 1)
 			For $i = 1 To $strSplitResult[0]
 				$strSplitResult[$i] = __RemoveBlank($strSplitResult[$i])
-				$result &= IsString($strSplitResult[$i]) and StringRegExp($strSplitResult[$i], "[$]") = False ? $strSplitResult[$i] : Execute($strSplitResult[$i])
+				$result &= Execute($strSplitResult[$i]) ; IsString($strSplitResult[$i]) and StringRegExp($strSplitResult[$i], "[$]") = False ? $strSplitResult[$i] : Execute($strSplitResult[$i])
+				MsgBox(0,$strSplitResult[$i],Execute($strSplitResult[$i]))
 			Next
 		Else
-			$result = IsString($strSplit[2]) and StringRegExp($strSplit[2], "[$]") = False ? $strSplit[2] : Execute($strSplit[2])
+			$result = Execute($strSplit[2]);IsString($strSplit[2]) and StringRegExp($strSplit[2], "[$]") = False ? $strSplit[2] : Execute($strSplit[2])
 		EndIf
 
 		If Not $result Then Return False
@@ -169,7 +170,7 @@ Func _CS_Execute($Console, $hConsole, $String)
 					For $iCol = 0 To UBound($result, 2) - 1
 						$resultStr &= "  " & $result[$iRow][$iCol] & __Space($iSpace[$iCol] - StringLen($result[$iRow][$iCol])) & "|"
 					Next
-					$resultStr &= @CRLF
+					If $iRow <> UBound($result) - 1 Then $resultStr &= @CRLF
 				Next
 				$result = $resultStr
 
@@ -187,7 +188,7 @@ Func _CS_Execute($Console, $hConsole, $String)
 	EndIf
 
 	_GUICtrlRichEdit_SetCharColor($hConsole, 0xFF0000)
-	_GUICtrlRichEdit_AppendText($hConsole, @CRLF & "   " & $result)
+	_GUICtrlRichEdit_AppendText($hConsole, @CRLF & "   " & $result & @CRLF)
 	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
 
 	Return $result

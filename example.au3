@@ -2,12 +2,12 @@
 #include "AutoItObject_Internal.au3"
 #include "Console.au3"
 
-Global $Array2D = StringSplit("Hello World AutoIT Console for Debugging", " ")
+Global $Array = StringSplit("Hello World AutoIT Console for Debugging", " ")
 
-Global $Array3D[10][5]
-For $iRow = 0 To UBound($Array3D) - 1
-	For $iCol = 0 To UBound($Array3D, 2) - 1
-		$Array3D[$iRow][$iCol] = Random(0, 1, 1) = 1 ? Random(0, 100, 1) : _GetRandomStr(Random(5, 10, 1))
+Global $Array2D[10][5]
+For $iRow = 0 To UBound($Array2D) - 1
+	For $iCol = 0 To UBound($Array2D, 2) - 1
+		$Array2D[$iRow][$iCol] = Random(0, 1, 1) = 1 ? Random(1000, 100000, 1) : _GetRandomStr(Random(5, 10, 1))
 	Next
 Next
 
