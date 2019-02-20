@@ -88,6 +88,7 @@ Func ConsoleOpen($Console)
 		If $isEnter And TimerDiff($tLastBreak) > 100 Then
 			__RemoveBreak($hConsole)
 			$result = _CS_Execute($Console, $hConsole, StringTrimLeft($iRead, 3))
+			_GUICtrlRichEdit_SetFont($hConsole, 11, "CONSOLAS")
 			_GUICtrlEdit_AppendText($hConsole,  @CRLF & ">_ ")
 			$iLastSel = _GUICtrlRichEdit_GetSel($hConsole)[0] - 3
 			$iCurrentSel = $iLastSel + 3
