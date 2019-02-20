@@ -14,6 +14,7 @@ Const $__cBlack = 0x000000
 Const $__cWhite = 0xFFFFFF
 Const $__cRed = 0x0000FF
 Const $__cBlue = 0xFF0000
+Const $__cGreen = 0x00FF00
 
 ;~ $c = ConsoleStart()
 ;~ $c.Mode = 0;$c_DarkMode
@@ -43,9 +44,10 @@ Func ConsoleOpen($Console)
 	_GUICtrlRichEdit_SetBkColor($hConsole, $Console.cBackground)
 	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
     _GUICtrlEdit_SetMargins($hConsole, BitOR($EC_LEFTMARGIN, $EC_RIGHTMARGIN), 10, 0)
+	GUICtrlSetResizing($hConsole, 1)
 
 	GUISetState()
-	_CS_Info($hConsole)
+	_CS_Info($Console, $hConsole)
 
 	$iLastSel = _GUICtrlRichEdit_GetSel($hConsole)[0] - 3
 
@@ -76,7 +78,7 @@ Func ConsoleOpen($Console)
 		$iRead = _GUICtrlRichEdit_GetTextInRange($hConsole, $iLastSel, $iMaxSel)
 
 		If $iCurrentLine <= 2 Then
-			_CS_Info($hConsole)
+			_CS_Info($Console, $hConsole)
 			ContinueLoop
 		EndIf
 		If $iCurrentSel - $iLastSel <= 2 Then _GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iLastSel + 3)
@@ -110,7 +112,6 @@ Func _CS_Execute($Console, $hConsole, $String)
 	Local $result
 	If Not $String Then Return False
 
-
 	If StringInStr($String, "=") Then
 		$strSplit = StringSplit($String, "=", 1)
 		$strSplit[1] = StringReplace( StringTrimLeft($strSplit[1], 1), " ", "")
@@ -127,7 +128,6 @@ Func _CS_Execute($Console, $hConsole, $String)
 			For $i = 1 To $strSplitResult[0]
 				$strSplitResult[$i] = __RemoveBlank($strSplitResult[$i])
 				$result &= Execute($strSplitResult[$i]) ; IsString($strSplitResult[$i]) and StringRegExp($strSplitResult[$i], "[$]") = False ? $strSplitResult[$i] : Execute($strSplitResult[$i])
-				MsgBox(0,$strSplitResult[$i],Execute($strSplitResult[$i]))
 			Next
 		Else
 			$result = Execute($strSplit[2]);IsString($strSplit[2]) and StringRegExp($strSplit[2], "[$]") = False ? $strSplit[2] : Execute($strSplit[2])
@@ -137,7 +137,7 @@ Func _CS_Execute($Console, $hConsole, $String)
 
 		Assign( $strSplit[1], $result, 2)
 
-	ElseIf StringRegExp($String, "[+-/*]") Then
+	ElseIf StringRegExp($String, "[*/+-]") Then
 		$result = Execute($String)
 		If Not $result Then Return False
 
@@ -187,7 +187,10 @@ Func _CS_Execute($Console, $hConsole, $String)
 		EndIf
 	EndIf
 
-	_GUICtrlRichEdit_SetCharColor($hConsole, 0xFF0000)
+
+	If Not $result Then Return $result
+
+	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cResultText)
 	_GUICtrlRichEdit_AppendText($hConsole, @CRLF & "   " & $result & @CRLF)
 	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
 
@@ -250,10 +253,12 @@ Func __RemoveBreak($hConsole)
 	WEnd
 EndFunc
 
-Func _CS_Info($hConsole)
+Func _CS_Info($Console, $hConsole)
 	_GUICtrlRichEdit_SetText($hConsole, "")
+	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
 	_GUICtrlRichEdit_SetFont($hConsole, 11, "CONSOLAS")
 	_GUICtrlRichEdit_InsertText($hConsole, "AutoIT Console - created by Ho Hai Dang" & @CRLF & @CRLF)
+	_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
 	_GUICtrlRichEdit_SetFont($hConsole, 11, "CONSOLAS")
 	_GUICtrlRichEdit_InsertText($hConsole,">_ ")
 EndFunc
@@ -272,7 +277,7 @@ Func _CS_SetupColor($Console)
 			$Console.cBackground = $__cBlack
 			$Console.cText = $__cWhite
 			$Console.cErrorText = $__cRed
-			$Console.cResultText = $__cBlue
+			$Console.cResultText = $__cGreen
 	EndSwitch
 EndFunc
 
