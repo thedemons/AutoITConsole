@@ -7,6 +7,7 @@
 
 #include "AutoItObject_Internal.au3"
 
+
 Const $c_WhiteMode = 0
 Const $c_DarkMode = 1
 
@@ -18,27 +19,41 @@ Const $__cGreen = 0x00FF00
 
 Const $__ERROR = "ERROR"
 
+Global $__Console[0], $__iC = 0
+Global $__posWatch = False
+
 Func ConsoleStart()
+	Local $aWatch[3][0]
+
 	$Console = IDispatch()
 	$Console.Mode = $c_WhiteMode
+	$Console.aWatch = $aWatch
 	$Console.Draw = False
 
 	Return $Console
 EndFunc
 
+
 Func ConsoleOpen($Console)
+
+	If __CheckConsole($Console) = False Then Return SetError(-1, 0, -1)
+	ConsoleOpenThread($Console)
+	While Not _IsPressed("1B")
+		ConsoleUpdate($Console)
+	WEnd
+
+EndFunc
+
+Func ConsoleOpenThread($Console)
 
 	If __CheckConsole($Console) = False Then Return SetError(-1, 0, -1)
 
 	If $Console.Draw = False Then _CS_SetupColor($Console)
 
 	Local $iW = 1000, $iH = 600, $iPadding = 15
-	Local	$tLastBreak = TimerInit()
-	Local	$isEnter, 	$isHoldEnter, 	$tEnter = TimerInit()
-	Local	$isUp, 		$isHoldUp, 		$tUp = TimerInit()
-	Local	$isDown, 	$isHoldDown, 	$tDown = TimerInit()
-
-	Local	$dMemory[0], $nMemCount = 0, $iIndexMemory = 0, $tempMemory = False
+	Local $dMemory[0], $nMemCount = 0, $iIndexMemory = 0, $tempMemory = False
+	Local $tEnter = TimerInit(), $tUp = TimerInit(), $tDown = TimerInit(), $tLastBreak = TimerInit(), $tUpdate = TimerInit()
+	Local $isHoldEnter, $isHoldUp, $isHoldDown
 
 	$hGUI = GUICreate("Console", $iW, $iH, -1, -1, BitOR(0x00040000,0x00080000))
 
@@ -53,94 +68,238 @@ Func ConsoleOpen($Console)
 
 	$iLastSel = _GUICtrlRichEdit_GetSel($hConsole)[0] - 3
 
-	While 1
+	$Console.dMemory = $dMemory
+	$Console.nMemCount = $nMemCount
+	$Console.iIdexMemory = $iIndexMemory
+	$Console.tempMemory = $tempMemory
+	$Console.tEnter = $tEnter
+	$Console.tUp = $tUp
+	$Console.tDown = $tDown
+	$Console.tLastBreak = $tLastBreak
+	$Console.tUpdate = $tUpdate
+	$Console.isHoldEnter = $isHoldEnter
+	$Console.isHoldUp = $isHoldUp
+	$Console.isHoldDown = $isHoldDown
+	$Console.iLastSel = $iLastSel
+	$Console.hConsole = $__iC
 
-		; Check for enter key
-		$isEnter = _IsPressed("0D")
-		$isUp = _IsPressed("26")
-		$isDown = _IsPressed("28")
-		$isCTRL_A = _IsPressed("11") And _IsPressed("41")
-
-		__RemoveBreak($hConsole)
-		__CheckHold($isEnter, $isHoldEnter, $tEnter)
-		__CheckHold($isUp, $isHoldUp, $tUp)
-		__CheckHold($isDown, $isHoldDown, $tDown)
-
-
-		$iCurrentSel = _GUICtrlRichEdit_GetSel($hConsole)[0]
-		$iCurrentLine = _GUICtrlRichEdit_GetLineCount($hConsole)
-		$iMaxSel = _GUICtrlRichEdit_GetFirstCharPosOnLine($hConsole, $iCurrentLine) + _GUICtrlRichEdit_GetLineLength($hConsole, $iCurrentLine)
-		$iRead = _GUICtrlRichEdit_GetTextInRange($hConsole, $iLastSel, $iMaxSel)
-
-		If $isCTRL_A Then _GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, False)
-
-		If $isUp And $nMemCount >= 1 And $iIndexMemory > 0 Then
-			_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, True)
-			_GUICtrlRichEdit_ReplaceText($hConsole, "")
-			_GUICtrlRichEdit_AppendText($hConsole, $dMemory[$iIndexMemory - 1])
-			If $tempMemory = False Then $tempMemory = StringTrimLeft($iRead, 3)
-			$iIndexMemory -= 1
-		EndIf
-
-		If $isDown And $nMemCount >= 1 And $iIndexMemory < $nMemCount Then
-			_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, True)
-			_GUICtrlRichEdit_ReplaceText($hConsole, "")
-			_GUICtrlRichEdit_AppendText($hConsole, ($iIndexMemory = $nMemCount - 1 ? $tempMemory : $dMemory[$iIndexMemory + 1]))
-			$iIndexMemory += 1
-		EndIf
-
-		If $iCurrentLine <= 2 Then
-			_CS_Info($Console, $hConsole)
-			ContinueLoop
-		EndIf
-		If $iCurrentSel - $iLastSel <= 2 Then _GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iLastSel + 3)
-		If StringLeft($iRead, 3) <> ">_ " Then
-			_GUICtrlRichEdit_SetSel($hConsole, $iLastSel, $iCurrentSel, True)
-			_GUICtrlRichEdit_ReplaceText($hConsole, ">_ ")
-		EndIf
-
-		If $isEnter And TimerDiff($tLastBreak) > 100 Then
-			__RemoveBreak($hConsole)
-			$dEnter = StringTrimLeft($iRead, 3)
-
-			$tempMemory = False
-			If $dEnter Then
-				$result = _CS_Execute($dEnter)
-
-				ReDim $dMemory[$nMemCount + 1]
-				$dMemory[$nMemCount] = $dEnter
-				$nMemCount += 1
-				$iIndexMemory = $nMemCount
-
-				If $result Then
-					_GUICtrlRichEdit_SetCharColor($hConsole, $result = $__ERROR ? $Console.cErrorText : $Console.cResultText)
-					_GUICtrlRichEdit_AppendText($hConsole, (StringLen($result) <= 10 ? "  ----  " : @CRLF ) & "   " & $result)
-					_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
-				EndIf
-			EndIf
-
-			_GUICtrlRichEdit_SetFont($hConsole, 11, "CONSOLAS")
-			_GUICtrlEdit_AppendText($hConsole,  @CRLF & ">_ ")
-
-			$iLastSel = _GUICtrlRichEdit_GetSel($hConsole)[0] - 3
-			$tLastBreak = TimerInit()
-		EndIf
-
-
-		Switch GUIGetMsg()
-			Case -3
-				Return
-		EndSwitch
-	WEnd
+	ReDim $__Console[$__iC + 1]
+	$__Console[$__iC] = $hConsole
+	$__iC += 1
 EndFunc
 
-Func _CS_Execute($String, $isResult = False)
+Func ConsolePush($Console, $push)
+
+	If __CheckConsole($Console) = False Then Return SetError(-1, 0, -1)
+
+	$Console.data = $push
+
+EndFunc
+
+Func ConsoleUpdate($Console)
+
+	If __CheckConsole($Console) = False Then Return SetError(-1, 0, -1)
+
+	Local $iCurrentSel, $iMaxSel, $iRead, $iCurrentLine
+
+	$dMemory = $Console.dMemory
+	$nMemCount = $Console.nMemCount
+	$iIndexMemory = $Console.iIdexMemory
+	$tempMemory = $Console.tempMemory
+	$tEnter = $Console.tEnter
+	$tUp = $Console.tUp
+	$tDown = $Console.tDown
+	$tLastBreak = $Console.tLastBreak
+	$tUpdate = $Console.tUpdate
+	$isHoldEnter = $Console.isHoldEnter
+	$isHoldUp = $Console.isHoldUp
+	$isHoldDown = $Console.isHoldDown
+	$iLastSel = $Console.iLastSel
+	$hConsole = $__Console[$Console.hConsole]
+	$aWatch = $Console.aWatch
+
+	; Check for enter key
+	$isEnter = _IsPressed("0D")
+	$isUp = _IsPressed("26")
+	$isDown = _IsPressed("28")
+	$isCTRL_A = _IsPressed("11") And _IsPressed("41")
+
+	__CheckHold($isEnter, $isHoldEnter, $tEnter)
+	__CheckHold($isUp, $isHoldUp, $tUp)
+	__CheckHold($isDown, $isHoldDown, $tDown)
+
+	If __RemoveBreak($hConsole) Then $isEnter = True
+
+	__CS_Info2Var($hConsole, $iCurrentSel, $iCurrentLine, $iMaxSel, $iRead, $iLastSel)
+
+	If $Console.data Then
+		_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, True)
+		_GUICtrlRichEdit_ReplaceText($hConsole, "")
+		_GUICtrlRichEdit_AppendText($hConsole, $Console.data)
+		__CS_Info2Var($hConsole, $iCurrentSel, $iCurrentLine, $iMaxSel, $iRead, $iLastSel)
+		$Console.data = Null
+	EndIf
+
+
+	If $isCTRL_A Then _GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, False)
+
+	If $isUp And $nMemCount >= 1 And $iIndexMemory > 0 Then
+		_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, True)
+		_GUICtrlRichEdit_ReplaceText($hConsole, "")
+		_GUICtrlRichEdit_AppendText($hConsole, $dMemory[$iIndexMemory - 1])
+		If $tempMemory = False Then $tempMemory = StringTrimLeft($iRead, 3)
+		$iIndexMemory -= 1
+	EndIf
+
+	If $isDown And $nMemCount >= 1 And $iIndexMemory < $nMemCount Then
+		$data = $iIndexMemory = $nMemCount - 1 ? $tempMemory : $dMemory[$iIndexMemory + 1]
+		_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iMaxSel, True)
+		_GUICtrlRichEdit_ReplaceText($hConsole, "")
+		_GUICtrlRichEdit_AppendText($hConsole, $data)
+		$iIndexMemory += 1
+	EndIf
+
+	If $iCurrentLine <= 2 Then
+		_CS_Info($Console, $hConsole)
+		Return
+	EndIf
+	If $iCurrentSel - $iLastSel <= 2 Then
+		If $isUp Or $isDown Then
+			__CS_Info2Var($hConsole, $iCurrentSel, $iCurrentLine, $iMaxSel, $iRead, $iLastSel)
+			_GUICtrlRichEdit_SetSel($hConsole, $iMaxSel, $iMaxSel)
+
+		Else
+			_GUICtrlRichEdit_SetSel($hConsole, $iLastSel + 3, $iLastSel + 3)
+		EndIf
+	EndIf
+	If StringLeft($iRead, 3) <> ">_ " Then
+		_GUICtrlRichEdit_SetSel($hConsole, $iLastSel, $iCurrentSel, True)
+		_GUICtrlRichEdit_ReplaceText($hConsole, ">_ ")
+	EndIf
+
+	$iFCS = _GUICtrlRichEdit_GetSel($hConsole)
+	$iFCS[0] -= $iLastSel
+	$iFCS[1] -= $iLastSel
+	If UBound($aWatch, 2) > 0 And TimerDiff($tUpdate) > 500 Then
+		BlockInput(1)
+		GUICtrlSetStyle($hConsole, $ES_READONLY , 0x00000200 + 0x00000200)
+		_GUICtrlRichEdit_PauseRedraw($hConsole)
+
+		For $i = 0 To UBound($aWatch, 2) - 1
+			$result = _CS_Execute($Console, $aWatch[0][$i])
+			$result_add = @LF
+			If StringLen($result) <= 200 And StringInStr($result, @LF) = False Then $result_add = "  ----  "
+			$result =  $result_add & "   " & $result
+
+			_GUICtrlRichEdit_SetSel($hConsole, $aWatch[1][$i], $aWatch[1][$i] + $aWatch[2][$i], True)
+			_GUICtrlRichEdit_ReplaceText($hConsole, $result)
+			_GUICtrlRichEdit_Deselect($hConsole)
+			_GUICtrlRichEdit_SetSel($hConsole, $aWatch[1][$i], $aWatch[1][$i] + StringLen($result), True)
+			_GUICtrlRichEdit_SetCharColor($hConsole, $result = $__ERROR ? $Console.cErrorText : $Console.cResultText)
+			_GUICtrlRichEdit_Deselect($hConsole)
+
+			$delta = StringLen($result) - $aWatch[2][$i]
+
+			For $j = $i + 1 To UBound($aWatch, 2) - 1
+				$aWatch[1][$j] += $delta
+			Next
+
+			$iLastSel += $delta
+			$aWatch[2][$i] = StringLen($result)
+
+		Next
+		$Console.aWatch = $aWatch
+		_GUICtrlRichEdit_SetSel($hConsole, $iFCS[0] + $iLastSel, $iFCS[1] + $iLastSel)
+		_GUICtrlRichEdit_ResumeRedraw($hConsole)
+		GUICtrlSetStyle($hConsole, $ES_MULTILINE + 0x00200000 + $ES_AUTOVSCROLL , 0x00000200 + 0x00000200 )
+
+		$tUpdate = TimerInit()
+	EndIf
+	If $isEnter And TimerDiff($tLastBreak) > 100 Then
+		__RemoveBreak($hConsole)
+		$dEnter = StringTrimLeft($iRead, 3)
+
+		$tempMemory = False
+		If $dEnter Then
+			$result = _CS_Execute($Console, $dEnter)
+
+			ReDim $dMemory[$nMemCount + 1]
+			$dMemory[$nMemCount] = $dEnter
+			$nMemCount += 1
+			$iIndexMemory = $nMemCount
+
+			If $result Then
+				$result_add = @LF
+				If StringLen($result) <= 200 And StringInStr($result, @LF) = False Then $result_add = "  ----  "
+				$result =  $result_add & "   " & $result
+				If $__posWatch Then
+					$aWatch = $Console.aWatch
+					$aWatch[1][UBound($aWatch, 2) - 1] = _GUICtrlRichEdit_GetSel($hConsole)[0]
+					$aWatch[2][UBound($aWatch, 2) - 1] = StringLen($result)
+					$Console.aWatch = $aWatch
+					$__posWatch = False
+				EndIf
+
+				_GUICtrlRichEdit_SetCharColor($hConsole, $result = $__ERROR ? $Console.cErrorText : $Console.cResultText)
+				_GUICtrlRichEdit_AppendText($hConsole, $result)
+				_GUICtrlRichEdit_SetCharColor($hConsole, $Console.cText)
+
+			EndIf
+		EndIf
+
+		_GUICtrlRichEdit_SetFont($hConsole, 11, "CONSOLAS")
+		_GUICtrlEdit_AppendText($hConsole,  @LF & ">_ ")
+
+		$iLastSel = _GUICtrlRichEdit_GetSel($hConsole)[0] - 3
+		$tLastBreak = TimerInit()
+	EndIf
+
+	$Console.dMemory = $dMemory
+	$Console.nMemCount = $nMemCount
+	$Console.iIdexMemory = $iIndexMemory
+	$Console.tempMemory = $tempMemory
+	$Console.tEnter = $tEnter
+	$Console.tUp = $tUp
+	$Console.tDown = $tDown
+	$Console.tLastBreak = $tLastBreak
+	$Console.tUpdate = $tUpdate
+	$Console.isHoldEnter = $isHoldEnter
+	$Console.isHoldUp = $isHoldUp
+	$Console.isHoldDown = $isHoldDown
+	$Console.iLastSel = $iLastSel
+
+EndFunc
+
+Func __CS_Info2Var($hConsole, ByRef $iCurrentSel, ByRef $iCurrentLine, ByRef $iMaxSel, ByRef $iRead, $iLastSel)
+
+	$iCurrentSel = _GUICtrlRichEdit_GetSel($hConsole)[0]
+	$iCurrentLine = _GUICtrlRichEdit_GetLineCount($hConsole)
+	$iMaxSel = _GUICtrlRichEdit_GetFirstCharPosOnLine($hConsole, $iCurrentLine) + _GUICtrlRichEdit_GetLineLength($hConsole, $iCurrentLine)
+	$iRead = _GUICtrlRichEdit_GetTextInRange($hConsole, $iLastSel, $iMaxSel)
+
+EndFunc
+
+Func _CS_Execute($Console, $String, $isResult = False)
 	If Not $String Then Return False
 
-	Local $result
+	Local $result, $aWatch, $isWatch = False, $_instance
 	$String = __RemoveBlank($String)
 
-	If StringInStr($String, "=") Then
+	If StringLeft($String, 1) = ">" Then
+		$result = StringTrimLeft($string, 1)
+		$result = _CS_Execute($Console, $result)
+
+		If $result = False Or $result = $__ERROR Then Return $__ERROR
+
+		$aWatch = $Console.aWatch
+		$_instance = UBound($aWatch, 2)
+		ReDim $aWatch[3][ $_instance + 1 ]
+		$aWatch[0][$_instance] = StringTrimLeft($string, 1)
+		$isWatch = True
+		$__posWatch = True
+		$Console.aWatch = $aWatch
+
+	ElseIf StringInStr($String, "=") Then
 
 		If StringLeft($string, 1) = "$" Then
 
@@ -148,32 +307,45 @@ Func _CS_Execute($String, $isResult = False)
 			$strVariable = StringReplace( StringTrimLeft($strSplit[1], 1), " ", "")
 			$strExecute = $strSplit[2]
 
-			$result = _CS_Execute($strExecute, True)
+			$result = _CS_Execute($Console, $strExecute, True)
 			Assign($strVariable, $result, 2)
 			If UBound($result) > 0 Then $result = _CS_Table($result)
 		Else
 			$result = $__ERROR
 		EndIf
 
-	ElseIf StringRegExp($String, "[\+\-\*\/](?![^\(]*\))") Then
+	ElseIf StringRegExp($String, "[\+\-\*\/\&](?![^\(]*\))") Then
 
-		$strExecute = StringRegExp($String, "[\+\-\*\/](?![^\(]*\))", 3)
-		$SplitExecute = StringSplit(StringRegExpReplace($String, "[\+\-\*\/](?![^\(]*\))", @LF), @LF, 1)
+		$strExecute = StringRegExp($String, "[\+\-\*\/\&](?![^\(]*\))", 3)
+		$SplitExecute = StringSplit(StringRegExpReplace($String, "[\+\-\*\/\&](?![^\(]*\))", @LF), @LF, 1)
 
 		For $i = 1 To $SplitExecute[0]
-			$result &= _CS_Execute($SplitExecute[$i], True) & ($i < $SplitExecute[0] ? $strExecute[$i - 1] : "")
+			$result &= _CS_Execute($Console, $SplitExecute[$i], True) & ($i < $SplitExecute[0] ? $strExecute[$i - 1] : "")
 		Next
-
 		$result = Execute($result)
 
-	ElseIf StringRegExp($String, "[\(\)]") Then
+	ElseIf StringRegExp($String, "[\<\>]") Then
 
+		$strExecute = StringRegExp($String, "[\<\>]", 1)[0]
+		$SplitExecute = StringSplit(StringRegExpReplace($String, "[\<\>]", @LF), @LF, 1)
+
+		If $SplitExecute[0] <> 2 Then Return $__ERROR
+
+		Switch $strExecute
+			Case "<"
+				$result = _CS_Execute($Console, $SplitExecute[1], True) < _CS_Execute($Console, $SplitExecute[2], True) ? "True" : "False"
+
+			Case ">"
+				$result = _CS_Execute($Console, $SplitExecute[1], True) > _CS_Execute($Console, $SplitExecute[2], True) ? "True" : "False"
+		EndSwitch
+
+	ElseIf StringRegExp($String, "[\(\)]") Then
 		$strFunc = StringRegExp($string, "(.*?)(\()", 1)[0]
 		$strExecute = StringTrimRight(StringRegExp($string, "(\()(.*)", 3)[1], 1)
 		$strParams = StringSplit(StringRegExpReplace($strExecute, ",(?![^\(]*\))", @LF), @LF, 1)
 
 		For $i = 1 To $strParams[0]
-			$strParams[$i] = _CS_Execute($strParams[$i], True)
+			$strParams[$i] = _CS_Execute($Console, $strParams[$i], True)
 		Next
 
 		$result = _CS_CallFunc($strFunc, $strParams)
@@ -187,16 +359,14 @@ Func _CS_Execute($String, $isResult = False)
 
 		$result = Execute($String)
 
-		If (Not $result) And (Not IsArray($result)) And (Not IsObj($result)) Then Return False
+		If (Not $result) And (Not IsArray($result)) And (Not IsObj($result)) Then Return $__ERROR
 		$result = $isResult ? $result : _CS_Table($result)
 
 	Else
 		$result = $String
-		If Not StringIsDigit($result) Then $result = $__ERROR
+		If StringIsDigit($result) = False And StringLeft($result, 1) <> "@" Then $result = $__ERROR
 
 	EndIf
-
-;~ 		MsgBox(0,"",$result)
 	Return $result
 EndFunc
 
@@ -224,7 +394,7 @@ Func _CS_Table($result)
 			For $iCol = 0 To UBound($result, 2) - 1
 				$strResult &= "  " & $iCol & __Space($iSpace[$iCol] - StringLen($iCol)) & "|"
 			Next
-			$strResult &= @CRLF & @CRLF
+			$strResult &= @LF & @LF
 
 			; data
 			For $iRow = 0 To UBound($result) - 1
@@ -232,7 +402,7 @@ Func _CS_Table($result)
 				For $iCol = 0 To UBound($result, 2) - 1
 					$strResult &= "  " & $result[$iRow][$iCol] & __Space($iSpace[$iCol] - StringLen($result[$iRow][$iCol])) & "|"
 				Next
-				If $iRow <> UBound($result) - 1 Then $strResult &= @CRLF
+				If $iRow <> UBound($result) - 1 Then $strResult &= @LF
 			Next
 
 		Else
@@ -289,8 +459,11 @@ Func __RemoveBlank($String)
 EndFunc
 
 Func __RemoveBreak($hConsole)
+	Local $isBreak = False
+
 	$line = _GUICtrlRichEdit_GetLineCount($hConsole)
 	$readLine = _GUICtrlRichEdit_GetTextInLine($hConsole, $line)
+
 	While $readLine = "" Or StringLeft($readLine, 1) <> ">"
 		If $line <= 2 Then Return
 		$_sel = _GUICtrlRichEdit_GetFirstCharPosOnLine($hConsole, $line)
@@ -299,7 +472,11 @@ Func __RemoveBreak($hConsole)
 
 		$line = _GUICtrlRichEdit_GetLineCount($hConsole)
 		$readLine = _GUICtrlRichEdit_GetTextInLine($hConsole, $line)
+
+		$isBreak = True
 	WEnd
+
+	Return $isBreak
 EndFunc
 
 Func _CS_Info($Console, $hConsole)
